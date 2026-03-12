@@ -89,38 +89,6 @@ export function TvShowsPage({
   return (
     <div className="min-h-screen bg-black">
       <main className="w-full">
-        {/* Title and Genre Selector */}
-        <div className="absolute top-24 left-0 right-0 z-40 px-8 md:px-16 lg:px-24">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl md:text-3xl font-semibold text-white/90 uppercase tracking-wider">
-              TV Shows
-            </h1>
-            <div className="h-6 w-px bg-white/30" />
-            <Select value={selectedGenre} onValueChange={setSelectedGenre}>
-              <SelectTrigger className="w-[200px] bg-zinc-900/80 backdrop-blur-md border-zinc-800/50 text-white [&>span]:text-white">
-                <SelectValue placeholder="Filter by genre" />
-              </SelectTrigger>
-              <SelectContent className="bg-zinc-900 border-zinc-800">
-                <SelectItem
-                  value="all"
-                  className="text-white hover:text-white focus:text-white focus:bg-zinc-800 hover:bg-zinc-800"
-                >
-                  All Genres
-                </SelectItem>
-                {initialGenres.map((genre) => (
-                  <SelectItem
-                    key={genre.id}
-                    value={genre.id.toString()}
-                    className="text-white hover:text-white focus:text-white focus:bg-zinc-800 hover:bg-zinc-800"
-                  >
-                    {genre.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
         {/* Poster Carousel */}
         <MovieCarousel movies={popularTvShows} />
 

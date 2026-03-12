@@ -1,52 +1,52 @@
-'use client';
+"use client";
 
-import * as React from 'react';
-import Link from 'next/link';
-import { Search, User, Menu } from 'lucide-react';
-import { Button } from './ui/button';
-import { cn } from '@/lib/utils';
-import { SearchModal } from './SearchModal';
-import { usePathname } from 'next/navigation';
+import * as React from "react";
+import Link from "next/link";
+import { Search, User, Menu } from "lucide-react";
+import { Button } from "./ui/button";
+import { cn } from "@/lib/utils";
+import { SearchModal } from "./SearchModal";
+import { usePathname } from "next/navigation";
 
 export function Header() {
   const [isScrolled, setIsScrolled] = React.useState(false);
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const pathname = usePathname();
-  console.log(pathname, 'ppp');
+  console.log(pathname, "ppp");
 
   React.useEffect(() => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 20);
     };
 
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   const navItems = [
-    { label: 'Ana Sayfa', href: '/' },
-    { label: 'Diziler', href: '/tv' },
-    { label: 'Filmler', href: '/movies' },
+    { label: "Ana Sayfa", href: "/" },
+    { label: "Diziler", href: "/tv" },
+    { label: "Filmler", href: "/movies" },
   ];
 
   return (
     <header
       className={cn(
-        'fixed top-0 left-0 right-0 z-50 transition-all duration-300',
+        "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
         isScrolled
-          ? 'bg-black/20 backdrop-blur-3xl shadow-lg'
-          : 'bg-linear-to-b from-black/80 via-black/40 to-transparent'
+          ? "bg-black/90 shadow-lg"
+          : "bg-linear-to-b from-black/80 via-black/40 to-transparent",
       )}
     >
       <div className="mx-auto px-8 md:px-16 lg:px-24">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 z-10">
-            <div className="text-2xl md:text-3xl font-bold text-white">WTW</div>
+            <div className="text-2xl md:text-3xl font-bold text-white">WH</div>
             <div className="h-6 w-px bg-white/30" />
             <div className="text-sm md:text-base text-white/80 font-medium">
-              WHERE TO WATCH
+              WATCH HERE
             </div>
           </Link>
 
@@ -57,8 +57,8 @@ export function Header() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'text-white/90 hover:text-white font-medium transition-colors text-sm lg:text-base font-medium',
-                  item.href === pathname && 'font-black'
+                  "text-white/90 hover:text-white font-medium transition-colors text-sm lg:text-base font-medium",
+                  item.href === pathname && "font-black",
                 )}
               >
                 {item.label}
