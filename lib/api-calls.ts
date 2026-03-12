@@ -260,3 +260,89 @@ export const getTvShowWatchProviders = async (tvId: number) => {
   const data = await response.json();
   return data.results; // { TR: { flatrate: [...], buy: [...], rent: [...] }, US: {...} }
 };
+
+export const getMovieGenres = async () => {
+  const response = await fetch(
+    `https://api.themoviedb.org/3/genre/movie/list?language=en-US`,
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.TMDB_ACCESS_TOKEN}`,
+      },
+      next: { revalidate: 86400 },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch movie genres');
+  }
+
+  const data = await response.json();
+  return data.genres;
+};
+
+export const getTvGenres = async () => {
+  const response = await fetch(
+    `https://api.themoviedb.org/3/genre/tv/list?language=en-US`,
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.TMDB_ACCESS_TOKEN}`,
+      },
+      next: { revalidate: 86400 },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch TV genres');
+  }
+
+  const data = await response.json();
+  return data.genres;
+};
+
+export const getMoviesByGenre = async (genreId: number, page: number = 1) => {
+  const response = await fetch(
+    `https://api.themoviedb.org/3/discover/movie?include_adult=false&include_video=false&language=en-US&page=${page}&sort_by=popularity.desc&with_genres=${genreId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.TMDB_ACCESS_TOKEN}`,
+      },
+      next: { revalidate: 3600 },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch movies by genre');
+  }
+
+  const data = await response.json();
+  return {
+    results: data.results,
+    page: data.page,
+    total_pages: data.total_pages,
+    total_results: data.total_results,
+  };
+};
+
+export const getTvShowsByGenre = async (genreId: number, page: number = 1) => {
+  const response = await fetch(
+    `https://api.themoviedb.org/3/discover/tv?include_adult=false&include_null_first_air_dates=false&language=en-US&page=${page}&sort_by=popularity.desc&with_genres=${genreId}`,
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.TMDB_ACCESS_TOKEN}`,
+      },
+      next: { revalidate: 3600 },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch TV shows by genre');
+  }
+
+  const data = await response.json();
+  return {
+    results: data.results,
+    page: data.page,
+    total_pages: data.total_pages,
+    total_results: data.total_results,
+  };
+};
