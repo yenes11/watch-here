@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Image from 'next/image';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface Provider {
   provider_id: number;
@@ -61,7 +62,9 @@ const countryNames: Record<string, string> = {
 export function MovieWatchProviders({
   watchProviders,
 }: MovieWatchProvidersProps) {
-  // Organize providers by type for each country
+  const [searchMode, setSearchMode] = React.useState<'country' | 'platform'>('country');
+  const [query, setQuery] = React.useState('');
+
   const organizedData = React.useMemo(() => {
     const countries = Object.entries(watchProviders)
       .map(([code, data]) => ({
@@ -85,20 +88,76 @@ export function MovieWatchProviders({
     return countries;
   }, [watchProviders]);
 
+  const filteredData = React.useMemo(() => {
+    const q = query.toLowerCase();
+
+    if (!q) return organizedData;
+
+    if (searchMode === 'country') {
+      return organizedData.filter((country) =>
+        country.name.toLowerCase().includes(q)
+      );
+    }
+
+    return organizedData
+      .map((country) => {
+        const filterProviders = (list: Provider[]) =>
+          list.filter((p) => p.provider_name.toLowerCase().includes(q));
+        return {
+          ...country,
+          streaming: filterProviders(country.streaming),
+          buy: filterProviders(country.buy),
+          rent: filterProviders(country.rent),
+          ads: filterProviders(country.ads),
+        };
+      })
+      .filter(
+        (country) =>
+          country.streaming.length > 0 ||
+          country.buy.length > 0 ||
+          country.rent.length > 0 ||
+          country.ads.length > 0
+      );
+  }, [organizedData, query, searchMode]);
+
   if (organizedData.length === 0) {
     return null;
   }
 
   return (
     <div className="py-16">
-      <div className="mb-16 px-8 md:px-16 lg:px-24">
-        <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4">
+      <div className="mb-8 px-8 md:px-16 lg:px-24">
+        <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-8">
           Nerede İzlenir?
         </h2>
+        <div className="flex flex-col gap-3">
+          <Tabs value={searchMode} onValueChange={(v) => { setSearchMode(v as 'country' | 'platform'); setQuery(''); }}>
+            <TabsList className="bg-zinc-900 border border-zinc-700">
+              <TabsTrigger value="country" className="text-zinc-400 data-[state=active]:text-white data-[state=active]:bg-zinc-700">
+                Ülke
+              </TabsTrigger>
+              <TabsTrigger value="platform" className="text-zinc-400 data-[state=active]:text-white data-[state=active]:bg-zinc-700">
+                Platform
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <input
+            type="text"
+            placeholder={searchMode === 'country' ? 'Ülke ara...' : 'Platform ara...'}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="bg-zinc-900 border border-zinc-700 text-white placeholder-zinc-500 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-zinc-500 w-56"
+          />
+        </div>
       </div>
 
+      {filteredData.length === 0 ? (
+        <div className="px-8 md:px-16 lg:px-24 py-12 text-zinc-500 text-sm">
+          Sonuç bulunamadı.
+        </div>
+      ) : (
       <div className="space-y-12">
-        {organizedData.map((country, index) => {
+        {filteredData.map((country, index) => {
           const isOdd = index % 2 === 0;
 
           return (
@@ -264,6 +323,7 @@ export function MovieWatchProviders({
           );
         })}
       </div>
+      )}
     </div>
   );
 }
