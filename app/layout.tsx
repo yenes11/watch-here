@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Header } from '@/components/Header';
@@ -14,9 +14,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Where to Watch - Film ve Dizi Platformları',
+  title: 'Watch Here – Find where to stream movies and TV shows',
   description:
-    'Film ve dizilerin hangi ülkelerde hangi platformlarda mevcut olduğunu keşfedin',
+    'Discover which streaming platforms carry a movie or TV show in every country.',
+};
+
+export const viewport: Viewport = {
+  themeColor: '#000000',
+  colorScheme: 'dark',
 };
 
 export default function RootLayout({
@@ -25,9 +30,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="tr">
+    <html lang="en" className="scroll-smooth">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black text-white overflow-x-hidden`}
       >
         <Header />
         {children}

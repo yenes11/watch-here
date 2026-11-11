@@ -2,301 +2,401 @@
 
 import * as React from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
-import { Search, Loader2, Film, Tv } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
-import { Skeleton } from './ui/skeleton';
+import { useRouter } from 'next/navigation';
+import { ChevronRight, CornerDownLeft, Loader2, Search, Star, X } from 'lucide-react';
+import { useMediaSearch } from '@/hooks/useMediaSearch';
+import { useScrollActiveOption } from '@/hooks/useScrollActiveOption';
 import { cn } from '@/lib/utils';
+import {
+  MEDIA_TYPE_LABEL,
+  formatRating,
+  getMediaHref,
+  getMediaTitle,
+  getReleaseYear,
+  hasRating,
+} from '@/lib/media';
+import { tmdbImage } from '@/lib/tmdb/image';
+import type { MediaSearchResult, MediaType } from '@/lib/tmdb/types';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
+import { Skeleton } from './ui/skeleton';
+import { MediaTypeIcon } from './MediaTypeIcon';
+
+type Filter = 'all' | MediaType;
+
+const FILTERS: readonly { value: Filter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'movie', label: 'Movies' },
+  { value: 'tv', label: 'TV Shows' },
+];
+
+const RESULTS_ID = 'search-results';
+const SKELETON_ROWS = 6;
+
+const resultId = (index: number) => `search-result-${index}`;
+const resultHref = (item: MediaSearchResult) =>
+  getMediaHref(item.media_type, item.id);
 
 interface SearchModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-interface SearchResult {
-  id: number;
-  title?: string;
-  name?: string;
-  poster_path: string | null;
-  backdrop_path: string | null;
-  media_type: 'movie' | 'tv' | 'person';
-  release_date?: string;
-  first_air_date?: string;
-  vote_average?: number;
+export function SearchModal({ open, onOpenChange }: SearchModalProps) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        overlayClassName="bg-black/80"
+        className={cn(
+          'flex flex-col gap-0 p-0 overflow-hidden bg-zinc-950 text-white border-zinc-800 shadow-2xl',
+          // Mobile: full screen sheet
+          'inset-0 top-0 left-0 translate-x-0 translate-y-0 h-dvh max-w-none rounded-none border-0',
+          // Desktop: floating panel near the top
+          'sm:inset-auto sm:top-[10vh] sm:left-1/2 sm:-translate-x-1/2 sm:h-auto sm:max-h-[75vh] sm:w-full sm:max-w-2xl sm:rounded-lg sm:border',
+          'data-[state=open]:zoom-in-100 sm:data-[state=open]:zoom-in-95'
+        )}
+      >
+        <DialogTitle className="sr-only">Search</DialogTitle>
+        <DialogDescription className="sr-only">
+          Search for movies and TV shows. Use arrow keys to navigate results.
+        </DialogDescription>
+        {/* Content unmounts when the dialog closes, which resets its state. */}
+        <SearchPanel onClose={() => onOpenChange(false)} />
+      </DialogContent>
+    </Dialog>
+  );
 }
 
-export function SearchModal({ open, onOpenChange }: SearchModalProps) {
+function SearchPanel({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
   const [query, setQuery] = React.useState('');
-  const [results, setResults] = React.useState<SearchResult[]>([]);
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [debounceTimer, setDebounceTimer] =
-    React.useState<NodeJS.Timeout | null>(null);
+  const [filter, setFilter] = React.useState<Filter>('all');
+  const [activeIndex, setActiveIndex] = React.useState(0);
+  const listRef = React.useRef<HTMLUListElement>(null);
 
-  React.useEffect(() => {
-    // Clear previous timer
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
-    }
+  const { results, status } = useMediaSearch(query);
+  const trimmed = query.trim();
+  const isLoading = status === 'loading';
 
-    // If query is empty, clear results
-    if (!query.trim()) {
-      setResults([]);
-      setIsLoading(false);
-      return;
-    }
+  // Highlight the first row whenever a new set of results arrives.
+  const [prevResults, setPrevResults] = React.useState(results);
+  if (results !== prevResults) {
+    setPrevResults(results);
+    setActiveIndex(0);
+  }
 
-    // Set loading state
-    setIsLoading(true);
+  const visible = React.useMemo(
+    () =>
+      filter === 'all'
+        ? results
+        : results.filter((item) => item.media_type === filter),
+    [results, filter]
+  );
 
-    // Create new timer
-    const timer = setTimeout(async () => {
-      try {
-        if (!query.trim()) {
-          setResults([]);
-          setIsLoading(false);
-          return;
-        }
+  const counts = React.useMemo(() => {
+    const tally: Record<Filter, number> = { all: results.length, movie: 0, tv: 0 };
+    for (const item of results) tally[item.media_type] += 1;
+    return tally;
+  }, [results]);
 
-        const response = await fetch(
-          `/api/search?query=${encodeURIComponent(query)}`,
-          {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+  useScrollActiveOption(listRef, activeIndex);
 
-        if (!response.ok) {
-          throw new Error('Search failed');
-        }
+  const openResult = (item: MediaSearchResult) => {
+    onClose();
+    router.push(resultHref(item));
+  };
 
-        const data = await response.json();
-        setResults(
-          data.results.filter(
-            (item: SearchResult) => item.media_type !== 'person'
-          )
-        );
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Search error:', error);
-        setResults([]);
-        setIsLoading(false);
+  const changeFilter = (next: Filter) => {
+    setFilter(next);
+    setActiveIndex(0);
+  };
+
+  const onInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    const count = visible.length;
+    if (count === 0) return;
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        setActiveIndex((index) => (index + 1) % count);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        setActiveIndex((index) => (index - 1 + count) % count);
+        break;
+      case 'Enter': {
+        event.preventDefault();
+        const item = visible[activeIndex];
+        if (item) openResult(item);
+        break;
       }
-    }, 300);
-
-    setDebounceTimer(timer);
-
-    // Cleanup
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [query]);
-
-  // Clear results when modal closes
-  React.useEffect(() => {
-    if (!open) {
-      setQuery('');
-      setResults([]);
-      setIsLoading(false);
     }
-  }, [open]);
+  };
 
-  const getMediaTitle = (item: SearchResult) =>
-    item.title || item.name || 'Untitled';
-  const getMediaDate = (item: SearchResult) =>
-    item.release_date || item.first_air_date;
-  const getMediaPath = (item: SearchResult) => {
-    if (item.media_type === 'movie') return `/movie/${item.id}`;
-    if (item.media_type === 'tv') return `/tv/${item.id}`;
-    return '#';
-  };
-  const getMediaTypeLabel = (item: SearchResult) => {
-    if (item.media_type === 'movie') return 'Movie';
-    if (item.media_type === 'tv') return 'TV Show';
-    return '';
-  };
+  const showSkeleton = isLoading && results.length === 0;
+  const showNoResults = Boolean(trimmed) && !isLoading && visible.length === 0;
 
   return (
     <>
-      <style jsx global>{`
-        .search-results-scroll::-webkit-scrollbar {
-          width: 8px;
-        }
-        .search-results-scroll::-webkit-scrollbar-track {
-          background: rgba(0, 0, 0, 0.2);
-          border-radius: 4px;
-        }
-        .search-results-scroll::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.2);
-          border-radius: 4px;
-        }
-        .search-results-scroll::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.3);
-        }
-      `}</style>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="bg-black gap-0 border-zinc-800/50 p-0 shadow-2xl max-w-[calc(100%-2rem)] overflow-hidden sm:max-w-4xl w-full">
-          <DialogHeader className="sr-only">
-            <DialogTitle>Search</DialogTitle>
-          </DialogHeader>
+      <div className="flex items-center gap-2 border-b border-zinc-800 px-4 pt-[env(safe-area-inset-top)]">
+        {isLoading ? (
+          <Loader2 aria-hidden className="size-5 shrink-0 text-zinc-400 animate-spin" />
+        ) : (
+          <Search aria-hidden className="size-5 shrink-0 text-zinc-400" />
+        )}
+        <input
+          type="search"
+          inputMode="search"
+          enterKeyHint="search"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="Search movies, TV shows…"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={onInputKeyDown}
+          role="combobox"
+          aria-expanded={visible.length > 0}
+          aria-controls={RESULTS_ID}
+          aria-activedescendant={visible[activeIndex] ? resultId(activeIndex) : undefined}
+          // 16px+ font prevents iOS from zooming the page on focus
+          className="flex-1 min-w-0 h-14 bg-transparent text-base sm:text-lg text-white placeholder:text-zinc-500 focus:outline-none [&::-webkit-search-cancel-button]:hidden"
+          autoFocus
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            aria-label="Clear search"
+            className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800"
+          >
+            <X aria-hidden className="size-4" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onClose}
+          className="sm:hidden text-sm font-medium text-zinc-300 pl-2"
+        >
+          Cancel
+        </button>
+        <kbd className="hidden sm:inline-flex items-center h-6 px-1.5 rounded border border-zinc-700 text-[11px] text-zinc-400 font-sans">
+          ESC
+        </kbd>
+      </div>
 
-          {/* Search Input */}
-          <div className="">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-zinc-400" />
-              <input
-                type="text"
-                placeholder="Search for movies, TV shows..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="w-full pl-12 pr-12 py-4 bg-zinc-900/50 border-b border-zinc-800/50 text-white placeholder:text-zinc-500 focus:outline-none transition-all"
-                autoFocus
+      {results.length > 0 && (
+        <div className="flex gap-2 px-4 py-3 border-b border-zinc-800/60">
+          {FILTERS.map(({ value, label }) => (
+            <FilterChip
+              key={value}
+              label={label}
+              count={counts[value]}
+              isSelected={filter === value}
+              onSelect={() => changeFilter(value)}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
+        {showSkeleton && <ResultsSkeleton />}
+
+        {showNoResults && (
+          <EmptyState
+            title={status === 'error' ? 'Something went wrong' : `No results for “${trimmed}”`}
+            subtitle={
+              status === 'error'
+                ? 'Please try again in a moment.'
+                : 'Check the spelling or try a different title.'
+            }
+          />
+        )}
+
+        {!trimmed && (
+          <EmptyState
+            title="Find a movie or show"
+            subtitle="See where it’s streaming in your country."
+          />
+        )}
+
+        {visible.length > 0 && (
+          <ul
+            id={RESULTS_ID}
+            role="listbox"
+            ref={listRef}
+            className={cn('p-2', isLoading && 'opacity-60')}
+          >
+            {visible.map((item, index) => (
+              <SearchResultRow
+                key={`${item.media_type}-${item.id}`}
+                item={item}
+                index={index}
+                isActive={index === activeIndex}
+                onHover={() => setActiveIndex(index)}
+                onOpen={() => openResult(item)}
               />
-              {isLoading && (
-                <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 size-5 text-zinc-400 animate-spin" />
-              )}
-            </div>
-          </div>
+            ))}
+          </ul>
+        )}
+      </div>
 
-          {/* Results */}
-          <div className="px-6 pb-6 overflow-y-auto max-h-[calc(85vh-180px)] search-results-scroll">
-            {query.trim() && isLoading && (
-              <div className="space-y-3 py-4">
-                {Array.from({ length: 5 }).map((_, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-4 p-4 bg-zinc-900/30 border-zinc-800/30"
-                  >
-                    {/* Poster Skeleton */}
-                    <Skeleton className="size-24 md:size-28 bg-zinc-800 rounded-lg" />
-                    {/* Info Skeleton */}
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-6 bg-zinc-800 w-3/4" />
-                      <div className="flex items-center gap-3">
-                        <Skeleton className="h-5 bg-zinc-800 w-20" />
-                        <Skeleton className="h-5 bg-zinc-800 w-16" />
-                        <Skeleton className="h-5 bg-zinc-800 w-12" />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {query.trim() && !isLoading && results.length === 0 && (
-              <div className="py-16 text-center">
-                <div className="inline-flex items-center justify-center size-16 rounded-full bg-zinc-900/50 mb-4">
-                  <Search className="size-8 text-zinc-500" />
-                </div>
-                <p className="text-zinc-400 text-lg">
-                  No results found for &quot;{query}&quot;
-                </p>
-                <p className="text-zinc-500 text-sm mt-2">
-                  Try a different search term
-                </p>
-              </div>
-            )}
-
-            {query.trim() && !isLoading && results.length > 0 && (
-              <div className="space-y-3 py-4">
-                {results.map((item) => (
-                  <Link
-                    key={`${item.media_type}-${item.id}`}
-                    href={getMediaPath(item)}
-                    onClick={() => onOpenChange(false)}
-                    className="flex items-center gap-4 p-4 bg-zinc-900/30 hover:bg-zinc-900/60 border-zinc-800/30 hover:border-zinc-700/50 transition-all duration-200 group backdrop-blur-sm"
-                  >
-                    {/* Poster - Larger and better styled */}
-                    <div className="relative size-24 md:size-28 flex-shrink-0 rounded-lg overflow-hidden bg-zinc-900 shadow-lg group-hover:shadow-xl transition-shadow">
-                      {item.poster_path ? (
-                        <Image
-                          src={`https://image.tmdb.org/t/p/w300${item.poster_path}`}
-                          alt={getMediaTitle(item)}
-                          fill
-                          className="object-cover transition-transform duration-300 group-hover:scale-110"
-                          sizes="112px"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
-                          {item.media_type === 'movie' ? (
-                            <Film className="size-10 text-zinc-500" />
-                          ) : (
-                            <Tv className="size-10 text-zinc-500" />
-                          )}
-                        </div>
-                      )}
-                      {/* Gradient overlay on hover */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                    </div>
-
-                    {/* Info - Better layout */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-3 mb-2">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-white font-bold text-base md:text-lg mb-1.5 line-clamp-2 group-hover:text-white transition-colors">
-                            {getMediaTitle(item)}
-                          </h3>
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <span className="text-xs font-medium text-zinc-300 px-2.5 py-1 bg-zinc-800/50 rounded-full border border-zinc-700/50">
-                              {getMediaTypeLabel(item)}
-                            </span>
-                            {getMediaDate(item) && (
-                              <span className="text-sm text-zinc-400">
-                                {new Date(getMediaDate(item)!).getFullYear()}
-                              </span>
-                            )}
-                            {item.vote_average && (
-                              <div className="flex items-center gap-1.5 text-sm text-yellow-400">
-                                <span>⭐</span>
-                                <span className="font-semibold">
-                                  {item.vote_average.toFixed(1)}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        {/* Arrow indicator */}
-                        <div className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <div className="size-8 rounded-full bg-white/10 flex items-center justify-center">
-                            <svg
-                              className="size-4 text-white"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M9 5l7 7-7 7"
-                              />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-
-            {!query.trim() && (
-              <div className="py-16 text-center">
-                <div className="inline-flex items-center justify-center size-20 rounded-full bg-gradient-to-br from-zinc-900/50 to-zinc-800/50 mb-6 backdrop-blur-sm">
-                  <Search className="size-10 text-zinc-500" />
-                </div>
-                <p className="text-zinc-300 text-lg font-medium mb-2">
-                  Start searching
-                </p>
-                <p className="text-zinc-500 text-sm">
-                  Type to find movies and TV shows
-                </p>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <div className="hidden sm:flex items-center gap-4 px-4 py-2.5 border-t border-zinc-800 text-xs text-zinc-500">
+        <span className="flex items-center gap-1.5">
+          <Kbd>↑</Kbd>
+          <Kbd>↓</Kbd> navigate
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Kbd>↵</Kbd> open
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Kbd>esc</Kbd> close
+        </span>
+      </div>
     </>
+  );
+}
+
+interface FilterChipProps {
+  label: string;
+  count: number;
+  isSelected: boolean;
+  onSelect: () => void;
+}
+
+function FilterChip({ label, count, isSelected, onSelect }: FilterChipProps) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={isSelected}
+      className={cn(
+        'h-8 px-3 rounded-md text-sm font-medium transition-colors border',
+        isSelected
+          ? 'bg-white text-black border-white'
+          : 'text-zinc-300 border-zinc-700 hover:border-zinc-500'
+      )}
+    >
+      {label}
+      <span className={cn('ml-1.5 text-xs', isSelected ? 'text-black/60' : 'text-zinc-500')}>
+        {count}
+      </span>
+    </button>
+  );
+}
+
+interface SearchResultRowProps {
+  item: MediaSearchResult;
+  index: number;
+  isActive: boolean;
+  onHover: () => void;
+  onOpen: () => void;
+}
+
+function SearchResultRow({ item, index, isActive, onHover, onOpen }: SearchResultRowProps) {
+  const year = getReleaseYear(item);
+
+  const onClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    // Let modified clicks open a new tab / window as usual.
+    if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+    event.preventDefault();
+    onOpen();
+  };
+
+  return (
+    <li id={resultId(index)} data-index={index} role="option" aria-selected={isActive}>
+      <a
+        href={resultHref(item)}
+        onClick={onClick}
+        onMouseMove={onHover}
+        className={cn(
+          'flex items-center gap-3 p-2 rounded-lg transition-colors',
+          isActive ? 'bg-zinc-800/80' : 'hover:bg-zinc-900'
+        )}
+      >
+        <div className="relative w-12 h-18 shrink-0 overflow-hidden bg-zinc-800">
+          {item.poster_path ? (
+            <Image
+              src={tmdbImage(item.poster_path, 'w92')}
+              alt=""
+              fill
+              className="object-cover"
+              sizes="48px"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <MediaTypeIcon mediaType={item.media_type} className="size-5 text-zinc-500" />
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-white truncate">{getMediaTitle(item)}</p>
+          <div className="flex items-center gap-2 mt-1 text-xs text-zinc-400">
+            <span className="inline-flex items-center gap-1">
+              <MediaTypeIcon mediaType={item.media_type} className="size-3" />
+              {MEDIA_TYPE_LABEL[item.media_type]}
+            </span>
+            {year !== null && (
+              <>
+                <span aria-hidden>·</span>
+                <span>{year}</span>
+              </>
+            )}
+            {hasRating(item.vote_average) && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="inline-flex items-center gap-0.5 text-zinc-300">
+                  <Star aria-hidden className="size-3 fill-zinc-300 stroke-zinc-300" />
+                  {formatRating(item.vote_average)}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {isActive ? (
+          <CornerDownLeft aria-hidden className="hidden sm:block size-4 text-zinc-400 shrink-0" />
+        ) : (
+          <ChevronRight aria-hidden className="sm:hidden size-4 text-zinc-600 shrink-0" />
+        )}
+      </a>
+    </li>
+  );
+}
+
+function ResultsSkeleton() {
+  return (
+    <div className="p-2" aria-hidden>
+      {Array.from({ length: SKELETON_ROWS }, (_, index) => (
+        <div key={index} className="flex items-center gap-3 p-2">
+          <Skeleton className="w-12 h-18 shrink-0 rounded-none bg-zinc-800" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-2/3 bg-zinc-800" />
+            <Skeleton className="h-3 w-1/3 bg-zinc-800" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="inline-flex items-center justify-center min-w-5 h-5 px-1 rounded border border-zinc-700 text-[10px] text-zinc-400 font-sans">
+      {children}
+    </kbd>
+  );
+}
+
+function EmptyState({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="py-16 px-6 text-center">
+      <div className="inline-flex items-center justify-center size-12 rounded-md border border-zinc-800 mb-4">
+        <Search aria-hidden className="size-6 text-zinc-500" />
+      </div>
+      <p className="text-zinc-200 font-medium">{title}</p>
+      <p className="text-zinc-500 text-sm mt-1">{subtitle}</p>
+    </div>
   );
 }

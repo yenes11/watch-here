@@ -1,28 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { searchMulti } from '@/lib/api-calls';
+import { type NextRequest, NextResponse } from 'next/server';
+import { upstreamError } from '@/lib/api-response';
+import { searchMedia } from '@/lib/tmdb/api';
 
+/** `GET /api/search?query=dune` — movies and TV shows only. */
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const query = searchParams.get('query');
-
-  if (!query || !query.trim()) {
-    return NextResponse.json({
-      results: [],
-      page: 1,
-      total_pages: 0,
-      total_results: 0,
-    });
-  }
+  const query = request.nextUrl.searchParams.get('query') ?? '';
 
   try {
-    const data = await searchMulti(query);
-    return NextResponse.json(data);
+    return NextResponse.json(await searchMedia(query));
   } catch (error) {
-    console.error('Search API error:', error);
-    return NextResponse.json(
-      { error: 'Failed to search' },
-      { status: 500 }
-    );
+    return upstreamError('Search failed', error);
   }
 }
-
