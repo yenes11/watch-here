@@ -1,118 +1,164 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import Link from "next/link";
-import { Search, User, Menu } from "lucide-react";
-import { Button } from "./ui/button";
-import { cn } from "@/lib/utils";
-import { SearchModal } from "./SearchModal";
-import { usePathname } from "next/navigation";
+import * as React from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Menu, Search, X } from 'lucide-react';
+import { useScrollFill } from '@/hooks/useScrollFill';
+import { useSearchShortcut } from '@/hooks/useSearchShortcut';
+import { cn } from '@/lib/utils';
+import { Button } from './ui/button';
+import { SearchModal } from './SearchModal';
+
+const NAV_ITEMS = [
+  { label: 'Home', href: '/' },
+  { label: 'TV Shows', href: '/tv' },
+  { label: 'Movies', href: '/movies' },
+] as const;
+
+/** `/tv` is active on `/tv` and `/tv/…`, but not on `/tvguide`. */
+const isActivePath = (pathname: string, href: string): boolean =>
+  href === '/'
+    ? pathname === '/'
+    : pathname === href || pathname.startsWith(`${href}/`);
+
+const ICON_BUTTON_CLASS =
+  'md:hidden size-10 text-white hover:bg-white/10 hover:text-white';
 
 export function Header() {
-  const [isScrolled, setIsScrolled] = React.useState(false);
-  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
+  const headerRef = React.useRef<HTMLElement>(null);
   const pathname = usePathname();
-  console.log(pathname, "ppp");
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
+  // The mobile menu belongs to the page it was opened on, so navigating
+  // closes it without an effect: it is only "open" for that pathname.
+  const [menuOpenOn, setMenuOpenOn] = React.useState<string | null>(null);
+  const isMenuOpen = menuOpenOn === pathname;
 
-  React.useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20);
-    };
+  const openSearch = () => setIsSearchOpen(true);
+  const toggleMenu = () => setMenuOpenOn(isMenuOpen ? null : pathname);
 
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  const navItems = [
-    { label: "Ana Sayfa", href: "/" },
-    { label: "Diziler", href: "/tv" },
-    { label: "Filmler", href: "/movies" },
-  ];
+  useScrollFill(headerRef);
+  useSearchShortcut(openSearch);
 
   return (
-    <header
-      className={cn(
-        "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
-        isScrolled
-          ? "bg-black/90 shadow-lg"
-          : "bg-linear-to-b from-black/80 via-black/40 to-transparent",
-      )}
-    >
-      <div className="mx-auto px-8 md:px-16 lg:px-24">
-        <div className="flex items-center justify-between h-16 md:h-20">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 z-10">
-            <div className="text-2xl md:text-3xl font-bold text-white">WH</div>
-            <div className="h-6 w-px bg-white/30" />
-            <div className="text-sm md:text-base text-white/80 font-medium">
+    <header ref={headerRef} className="fixed top-0 left-0 right-0 z-50 [--header-fill:0]">
+      {/* Legibility gradient, always present */}
+      <div
+        aria-hidden
+        className="absolute inset-0 bg-linear-to-b from-black/80 via-black/40 to-transparent pointer-events-none"
+      />
+      {/* Solid fill, fades in with scroll (or fully when the menu is open) */}
+      <div
+        aria-hidden
+        className={cn(
+          'absolute inset-0 bg-black pointer-events-none',
+          isMenuOpen ? 'opacity-100' : 'opacity-(--header-fill)'
+        )}
+      />
+
+      <div className="relative mx-auto px-page">
+        <div className="flex items-center justify-between h-16 md:h-20 gap-4">
+          <Link href="/" className="flex items-center gap-2 shrink-0">
+            <span className="text-2xl md:text-3xl font-bold text-white">WH</span>
+            <span aria-hidden className="h-6 w-px bg-white/30" />
+            <span className="text-xs sm:text-sm md:text-base text-white/80 font-medium">
               WATCH HERE
-            </div>
+            </span>
           </Link>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center gap-6 lg:gap-8">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "text-white/90 hover:text-white font-medium transition-colors text-sm lg:text-base font-medium",
-                  item.href === pathname && "font-black",
-                )}
-              >
-                {item.label}
-              </Link>
-            ))}
+          <nav aria-label="Main" className="hidden md:flex items-center gap-6 lg:gap-8">
+            <NavLinks
+              pathname={pathname}
+              linkClassName="relative text-sm lg:text-base font-medium transition-colors py-1"
+              activeClassName="text-white after:absolute after:inset-x-0 after:-bottom-0.5 after:h-0.5 after:rounded-full after:bg-white"
+              inactiveClassName="text-white/70 hover:text-white"
+            />
           </nav>
 
-          {/* Right Side Actions */}
-          <div className="flex items-center gap-3 md:gap-4">
-            {/* Search */}
+          <div className="flex items-center gap-1 md:gap-3">
+            {/* Desktop: search pill with shortcut hint */}
+            <button
+              type="button"
+              onClick={openSearch}
+              className="hidden md:flex items-center gap-2 h-9 pl-3 pr-2 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-sm text-white/70 transition-colors"
+            >
+              <Search aria-hidden className="size-4" />
+              <span className="pr-6">Search…</span>
+              <kbd className="text-[11px] font-sans px-1.5 rounded bg-white/10 text-white/60">
+                ⌘K
+              </kbd>
+            </button>
+
             <Button
               variant="ghost"
               size="icon"
-              className="text-white cursor-pointer"
+              className={ICON_BUTTON_CLASS}
               aria-label="Search"
-              onClick={() => setIsSearchOpen(true)}
+              onClick={openSearch}
             >
-              <Search className="size-5" />
+              <Search aria-hidden className="size-5" />
             </Button>
 
-            {/* Mobile Menu Button */}
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden text-white hover:bg-white/10"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              aria-label="Menu"
+              className={ICON_BUTTON_CLASS}
+              onClick={toggleMenu}
+              aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={isMenuOpen}
             >
-              <Menu className="size-5" />
+              {isMenuOpen ? (
+                <X aria-hidden className="size-5" />
+              ) : (
+                <Menu aria-hidden className="size-5" />
+              )}
             </Button>
           </div>
         </div>
 
-        {/* Mobile Navigation */}
         {isMenuOpen && (
-          <nav className="md:hidden pb-4 border-t border-white/10">
-            <div className="flex flex-col gap-4 pt-4">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="text-white/90 hover:text-white transition-colors text-base font-medium"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  {item.label}
-                </Link>
-              ))}
+          <nav aria-label="Main" className="md:hidden pb-3 border-t border-white/10">
+            <div className="flex flex-col pt-2">
+              <NavLinks
+                pathname={pathname}
+                linkClassName="py-3 text-base font-medium transition-colors"
+                activeClassName="text-white"
+                inactiveClassName="text-white/70"
+              />
             </div>
           </nav>
         )}
       </div>
 
-      {/* Search Modal */}
       <SearchModal open={isSearchOpen} onOpenChange={setIsSearchOpen} />
     </header>
   );
+}
+
+interface NavLinksProps {
+  pathname: string;
+  linkClassName: string;
+  activeClassName: string;
+  inactiveClassName: string;
+}
+
+function NavLinks({
+  pathname,
+  linkClassName,
+  activeClassName,
+  inactiveClassName,
+}: NavLinksProps) {
+  return NAV_ITEMS.map(({ label, href }) => {
+    const isActive = isActivePath(pathname, href);
+    return (
+      <Link
+        key={href}
+        href={href}
+        aria-current={isActive ? 'page' : undefined}
+        className={cn(linkClassName, isActive ? activeClassName : inactiveClassName)}
+      >
+        {label}
+      </Link>
+    );
+  });
 }
