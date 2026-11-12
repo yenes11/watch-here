@@ -7,6 +7,7 @@ import type {
   MediaSearchResult,
   MediaSummaryOf,
   MediaType,
+  MovieCollection,
   MovieSummary,
   MultiSearchResult,
   Paginated,
@@ -74,9 +75,16 @@ export async function getGenres(mediaType: MediaType): Promise<Genre[]> {
 export function getMediaDetails<T extends MediaType>(mediaType: T, id: number) {
   return tmdbFetch<MediaDetailsOf<T>>(`/${mediaType}/${id}`, {
     params: {
-      append_to_response: 'images',
+      append_to_response: 'images,recommendations,similar',
       include_image_language: IMAGE_LANGUAGES,
     },
+  });
+}
+
+/** Every film in a movie series. Changes rarely, so cached for a day. */
+export function getCollection(collectionId: number) {
+  return tmdbFetch<MovieCollection>(`/collection/${collectionId}`, {
+    revalidate: ONE_DAY,
   });
 }
 

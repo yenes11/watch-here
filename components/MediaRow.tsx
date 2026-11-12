@@ -20,6 +20,8 @@ const CAROUSEL_OPTIONS = {
 } as const;
 
 interface MediaRowProps<T extends MediaType> {
+  /** Anchor for jump links; offset so the fixed header doesn't cover it. */
+  id?: string;
   title: string;
   items: MediaSummaryOf<T>[];
   mediaType: T;
@@ -27,6 +29,7 @@ interface MediaRowProps<T extends MediaType> {
 
 /** A titled, horizontally scrolling row of posters. */
 export function MediaRow<T extends MediaType>({
+  id,
   title,
   items,
   mediaType,
@@ -37,7 +40,7 @@ export function MediaRow<T extends MediaType>({
   if (items.length === 0) return null;
 
   return (
-    <section className="mb-10 md:mb-14">
+    <section id={id} className="mb-10 md:mb-14 scroll-mt-20 md:scroll-mt-24">
       <h2 className="mb-3 md:mb-4 px-page text-lg md:text-xl lg:text-2xl font-semibold tracking-tight text-white">
         {title}
       </h2>

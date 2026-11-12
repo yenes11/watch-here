@@ -4,6 +4,7 @@ import { isTmdbNotFound } from './tmdb/client';
 import type { MediaType } from './tmdb/types';
 import { getViewerCountry } from './country';
 import { parsePositiveInt } from './parse';
+import { loadRelatedTitles } from './related';
 
 /**
  * Everything a movie / TV detail page needs, fetched in parallel.
@@ -23,7 +24,8 @@ export async function loadMediaPage<T extends MediaType>(
       getWatchProviders(mediaType, id),
       getViewerCountry(),
     ]);
-    return { details, watchProviders, country };
+    const related = await loadRelatedTitles<T>(details);
+    return { details, watchProviders, country, related };
   } catch (error) {
     if (isTmdbNotFound(error)) notFound();
     throw error;

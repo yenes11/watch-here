@@ -73,11 +73,36 @@ interface MediaDetailsBase {
   images?: ImageCollection;
 }
 
-export interface MovieDetails extends MovieSummary, MediaDetailsBase {
-  runtime: number | null;
+/** A movie series ("Dune Collection"), as referenced from a movie. */
+export interface CollectionRef {
+  id: number;
+  name: string;
 }
 
-export interface TvShowDetails extends TvShowSummary, MediaDetailsBase {
+export interface MovieCollection extends CollectionRef {
+  parts: MovieSummary[];
+}
+
+/** Titles TMDB relates to this one (appended to the details request). */
+interface RelatedTitles<T> {
+  /** Based on what viewers watched next — usually the better list. */
+  recommendations?: Paginated<T>;
+  /** Based on shared genres and keywords. */
+  similar?: Paginated<T>;
+}
+
+export interface MovieDetails
+  extends MovieSummary,
+    MediaDetailsBase,
+    RelatedTitles<MovieSummary> {
+  runtime: number | null;
+  belongs_to_collection: CollectionRef | null;
+}
+
+export interface TvShowDetails
+  extends TvShowSummary,
+    MediaDetailsBase,
+    RelatedTitles<TvShowSummary> {
   last_air_date: string | null;
   episode_run_time: number[];
   number_of_seasons: number;
