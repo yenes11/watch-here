@@ -131,10 +131,12 @@
 @media (min-width: 64rem) {
   :root { --page-gutter: 4rem; }
 }
-/* Large screens: at least 4.5rem of side space, and content never grows
-   wider than 1760px — beyond that the gutter absorbs the extra width. */
+/* Large screens: the gutter tops out at 80px; content uses the rest. */
 @media (min-width: 80rem) {
-  :root { --page-gutter: max(4.5rem, calc((100vw - 1760px) / 2)); }
+  :root { --page-gutter: 4.5rem; }
+}
+@media (min-width: 120rem) {
+  :root { --page-gutter: 5rem; }
 }
 
 @utility px-page {

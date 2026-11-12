@@ -1,4 +1,5 @@
 import type {
+  MediaDetailsOf,
   MediaSummary,
   MediaSummaryOf,
   MediaType,
@@ -108,3 +109,36 @@ export function createUniqueFilter(seenIds: Iterable<number> = []) {
       return true;
     });
 }
+
+const MAX_RELATED = 20;
+
+/**
+ * "More like this" for a detail page: TMDB recommendations, or the
+ * genre-based `similar` list when a title has no recommendations yet.
+ * Drops the title itself, anything in `exclude` (e.g. its own series) and
+ * entries without a poster, which would break the row's rhythm.
+ */
+export function getRelatedTitles<T extends MediaType>(
+  details: MediaDetailsOf<T>,
+  exclude: ReadonlySet<number> = new Set()
+): MediaSummaryOf<T>[] {
+  const recommendations = details.recommendations?.results ?? [];
+  const source = recommendations.length
+    ? recommendations
+    : (details.similar?.results ?? []);
+
+  return (source as MediaSummaryOf<T>[])
+    .filter(
+      (item) =>
+        item.id !== details.id && !exclude.has(item.id) && item.poster_path
+    )
+    .slice(0, MAX_RELATED);
+}
+
+/** Oldest first; titles without a release date (unannounced) go last. */
+export const byReleaseDate = (a: MediaSummary, b: MediaSummary): number =>
+  (getReleaseYear(a) === null ? 1 : 0) - (getReleaseYear(b) === null ? 1 : 0) ||
+  releaseDate(a).localeCompare(releaseDate(b));
+
+const releaseDate = (item: MediaSummary): string =>
+  (isMovie(item) ? item.release_date : item.first_air_date) ?? '';

@@ -1,9 +1,10 @@
 import Image from 'next/image';
-import { Film } from 'lucide-react';
+import { ArrowDown, Film } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatRating, getMediaTitle, hasRating } from '@/lib/media';
 import { tmdbImage } from '@/lib/tmdb/image';
 import { pickTitleLogo } from '@/lib/tmdb/title-art';
+import type { SectionLink } from '@/lib/related';
 import type { MediaDetails } from '@/lib/tmdb/types';
 import { TitleLogo } from './TitleLogo';
 
@@ -13,12 +14,19 @@ interface MediaHeroProps {
   media: MediaDetails;
   /** Plain-text facts, e.g. year and runtime. Genres are appended. */
   facts: string[];
+  /** Jump links to the rows further down the page (series, similar). */
+  sectionLinks?: SectionLink[];
   /** Rendered in the main column under the overview (the watch section). */
   children?: React.ReactNode;
 }
 
 /** Backdrop, poster, title and synopsis at the top of a detail page. */
-export function MediaHero({ media, facts, children }: MediaHeroProps) {
+export function MediaHero({
+  media,
+  facts,
+  sectionLinks = [],
+  children,
+}: MediaHeroProps) {
   const title = getMediaTitle(media);
   const logo = pickTitleLogo(media.images?.logos);
   const { backdrop_path, poster_path, tagline, overview, genres } = media;
@@ -28,7 +36,7 @@ export function MediaHero({ media, facts, children }: MediaHeroProps) {
     : facts;
 
   return (
-    <article className="pb-20">
+    <article className="pb-14 md:pb-20">
       {/* Backdrop band: contained, so it can never overlap the content */}
       <div className="relative h-[42svh] min-h-64 md:h-[62vh] md:max-h-[680px] overflow-hidden bg-zinc-950">
         {backdrop_path && (
@@ -85,6 +93,8 @@ export function MediaHero({ media, facts, children }: MediaHeroProps) {
 
             <Rating voteAverage={media.vote_average} voteCount={media.vote_count} />
 
+            <SectionLinks links={sectionLinks} />
+
             {(tagline || overview) && (
               <div className="mt-6 max-w-[65ch]">
                 {tagline && <p className="text-zinc-400 mb-2">{tagline}</p>}
@@ -121,5 +131,29 @@ function Rating({
         {voteCount > 0 && ` · ${voteCount.toLocaleString('en-US')} votes`}
       </span>
     </div>
+  );
+}
+
+/** Buttons that scroll down to the series / "More like this" rows. */
+function SectionLinks({ links }: { links: SectionLink[] }) {
+  if (links.length === 0) return null;
+
+  return (
+    <nav aria-label="On this page" className="mt-6 flex flex-wrap gap-2">
+      {links.map((link) => (
+        <a
+          key={link.href}
+          href={link.href}
+          className="group inline-flex items-center gap-2 h-9 pl-3 pr-2.5 rounded-md border border-zinc-700 bg-black/40 text-sm text-zinc-200 hover:border-zinc-500 hover:text-white transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        >
+          {link.label}
+          <span className="tabular-nums text-zinc-500">{link.count}</span>
+          <ArrowDown
+            aria-hidden
+            className="size-3.5 text-zinc-400 transition-transform duration-150 group-hover:translate-y-0.5"
+          />
+        </a>
+      ))}
+    </nav>
   );
 }
